@@ -52,7 +52,6 @@ def render_vis(
     if optimizer is None:
         optimizer = lambda params: torch.optim.Adam(params, lr=5e-2)
     optimizer = optimizer(params)
-
     if transforms is None:
         transforms = transform.standard_transforms
     transforms = transforms.copy()
@@ -67,7 +66,7 @@ def render_vis(
             transforms.append(transform.normalize())
 
     # Upsample images smaller than 224
-    image_shape = image_f().shape
+    image_shape = image_f().cpu().shape
     if fixed_image_size is not None:
         new_size = fixed_image_size
     elif image_shape[2] < 224 or image_shape[3] < 224:
@@ -81,20 +80,18 @@ def render_vis(
 
     transform_f = transform.compose(transforms)
 
-    hook = hook_model(model, image_f)
-    objective_f = objectives.as_objective(objective_f)
+    #objective_f = objectives.as_objective(objective_f)
 
     if verbose:
-        model(transform_f(image_f()))
-        print("Initial loss: {:.3f}".format(objective_f(hook)))
+        model(transform_f(image_f().cpu()))
+        print("Initial loss: {:.3f}".format(objective_f(model, image_f().cpu())))
 
     images = []
     try:
         for i in tqdm(range(1, max(thresholds) + 1), disable=(not progress)):
             def closure():
-                optimizer.zero_grad()
                 try:
-                    model(transform_f(image_f()))
+                    model(transform_f(image_f().cpu()))
                 except RuntimeError as ex:
                     if i == 1:
                         # Only display the warning message
@@ -106,30 +103,30 @@ def render_vis(
                             "computed layers are not used in the objective function"
                             f"(exception details: '{ex}')"
                         )
-                loss = objective_f(hook)
+                loss = objective_f(model, image_f().cpu())
                 loss.backward()
                 return loss
-                
+            optimizer.zero_grad()
             optimizer.step(closure)
             if i in thresholds:
-                image = tensor_to_img_array(image_f())
+                #image = tensor_to_img_array(image_f().cpu())
                 if verbose:
-                    print("Loss at step {}: {:.3f}".format(i, objective_f(hook)))
+                    print("Loss at step {}: {:.3f}".format(i, objective_f(model, image_f().cpu())))
                     if show_inline:
                         show(image)
-                images.append(image)
+                #images.append(image)
     except KeyboardInterrupt:
         print("Interrupted optimization at step {:d}.".format(i))
         if verbose:
-            print("Loss at step {}: {:.3f}".format(i, objective_f(hook)))
-        images.append(tensor_to_img_array(image_f()))
+            print("Loss at step {}: {:.3f}".format(i, objective_f(model, image_f().cpu())))
+        #images.append(tensor_to_img_array(image_f().cpu()))
 
     if save_image:
-        export(image_f(), image_name)
+        export(image_f().cpu(), image_name)
     if show_inline:
-        show(tensor_to_img_array(image_f()))
+        show(tensor_to_img_array(image_f().cpu()))
     elif show_image:
-        view(image_f())
+        view(image_f().cpu())
     return images
 
 
@@ -197,7 +194,7 @@ def hook_model(model, image_f):
 
     def hook(layer):
         if layer == "input":
-            out = image_f()
+            out = image_f().cpu()
         elif layer == "labels":
             out = list(features.values())[-1].features
         else:
