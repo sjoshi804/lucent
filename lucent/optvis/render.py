@@ -83,15 +83,15 @@ def render_vis(
     #objective_f = objectives.as_objective(objective_f)
 
     if verbose:
-        model(transform_f(image_f().cpu()))
-        print("Initial loss: {:.3f}".format(objective_f(model, image_f().cpu())))
+        model(transform_f(image_f()))
+        print("Initial loss: {:.3f}".format(objective_f(model, image_f())))
 
     images = []
     try:
         for i in tqdm(range(1, max(thresholds) + 1), disable=(not progress)):
             def closure():
                 try:
-                    model(transform_f(image_f().cpu()))
+                    model(transform_f(image_f()))
                 except RuntimeError as ex:
                     if i == 1:
                         # Only display the warning message
@@ -103,7 +103,7 @@ def render_vis(
                             "computed layers are not used in the objective function"
                             f"(exception details: '{ex}')"
                         )
-                loss = objective_f(model, image_f().cpu())
+                loss = objective_f(model, image_f())
                 loss.backward()
                 return loss
             optimizer.zero_grad()
